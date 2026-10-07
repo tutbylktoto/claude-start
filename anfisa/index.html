@@ -1,0 +1,804 @@
+<title>Анфиса и Какашечка</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rubik+Bubbles&family=Rubik:wght@400;600;800&display=swap">
+<style>
+/* Layout: full-screen 3D canvas, HUD strip on top, touch pads at the bottom, cards over the scene */
+:root{
+  color-scheme: dark;
+  --ink:#0c1618;      /* sewer darkness */
+  --deep:#16292d;     /* panel ground */
+  --water:#4cc7b2;    /* flowing water */
+  --rust:#d57b3b;     /* old pipes */
+  --pink:#ff86b8;     /* Anfisa */
+  --poo:#9a6431;      /* Kakashechka */
+  --cream:#fff2d9;    /* text */
+  --muted:#b7c9c4;
+  --font-display:"Rubik Bubbles","Rubik",system-ui,sans-serif;
+  --font-ui:"Rubik",system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+html,body{height:100%}
+[hidden]{display:none!important}
+body{background:var(--ink);color:var(--cream);font-family:var(--font-ui);overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
+#game{position:fixed;inset:0}
+#game canvas{display:block;width:100%;height:100%}
+button{font-family:var(--font-ui);cursor:pointer;border:0;color:var(--ink)}
+button:focus-visible{outline:3px solid var(--cream);outline-offset:3px}
+
+#hud{position:fixed;left:0;right:0;top:0;padding:calc(env(safe-area-inset-top,0px) + 10px) 16px 0;display:grid;gap:6px;pointer-events:none}
+.hud-row{display:flex;align-items:center;gap:10px}
+.track{position:relative;flex:1;height:14px;border-radius:7px;background:rgba(255,242,217,.14);border:2px solid rgba(255,242,217,.35)}
+.mk{position:absolute;top:50%;transform:translate(-50%,-50%);font-size:22px;line-height:1;transition:none}
+.flag{position:absolute;right:-6px;top:50%;transform:translate(50%,-50%);font-size:20px}
+.hud-btn{pointer-events:auto;width:40px;height:40px;border-radius:12px;background:rgba(255,242,217,.18);color:var(--cream);font-size:18px;font-weight:800}
+.stats{display:flex;gap:14px;flex-wrap:wrap;font-weight:600;font-size:15px;font-variant-numeric:tabular-nums;text-shadow:0 2px 4px rgba(0,0,0,.6)}
+.stats .boost{color:var(--water)}
+
+#toast{position:fixed;left:50%;top:28%;transform:translateX(-50%);font-family:var(--font-display);font-size:clamp(26px,6vw,46px);color:var(--cream);text-align:center;text-shadow:0 3px 0 var(--ink),0 0 18px rgba(0,0,0,.7);pointer-events:none;opacity:0;transition:opacity .25s;width:min(92vw,720px)}
+#toast.on{opacity:1}
+#count{position:fixed;inset:0;display:grid;place-items:center;font-family:var(--font-display);font-size:clamp(70px,20vw,160px);color:var(--pink);text-shadow:0 6px 0 var(--ink);pointer-events:none}
+#caption{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 28px);transform:translateX(-50%);width:min(92vw,640px);padding:14px 18px;border-radius:16px;background:rgba(12,22,24,.82);border:2px solid var(--rust);font-size:clamp(16px,4vw,21px);line-height:1.35;text-align:center}
+#caption small{display:block;margin-top:6px;color:var(--muted);font-size:13px}
+#fade{position:fixed;inset:0;background:#000;opacity:0;pointer-events:none;transition:opacity .5s}
+
+.panel{position:fixed;inset:0;display:grid;place-items:center;padding:16px;background:rgba(6,12,13,.55)}
+.card{width:min(100%,520px);max-height:100%;overflow:auto;background:var(--deep);border:3px solid var(--rust);border-radius:22px;padding:22px 20px;box-shadow:0 14px 0 rgba(0,0,0,.35);display:grid;gap:14px;text-align:center}
+.card h1{margin:0;font-family:var(--font-display);font-weight:400;font-size:clamp(34px,9vw,52px);line-height:1.02;color:var(--pink);text-wrap:balance}
+.card h1 span{color:#d9a46a}
+.card h2{margin:0;font-family:var(--font-display);font-weight:400;font-size:clamp(28px,7vw,40px);line-height:1.1;text-wrap:balance}
+.card p{margin:0;line-height:1.45;color:var(--cream)}
+.card .hint{font-size:14px;color:var(--muted)}
+.btns{display:flex;flex-wrap:wrap;gap:10px;justify-content:center}
+.btn{padding:13px 20px;border-radius:14px;font-size:17px;font-weight:800;background:var(--cream)}
+.btn.main{background:var(--pink)}
+.btn.alt{background:transparent;color:var(--cream);border:2px solid rgba(255,242,217,.45)}
+.diff .btn[aria-pressed="true"]{background:var(--water)}
+.keys{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;text-align:left;font-size:14px;color:var(--muted);margin:0 auto}
+.keys b{color:var(--cream);font-weight:600;white-space:nowrap}
+.res{display:grid;grid-template-columns:1fr auto;gap:6px 14px;text-align:left;font-variant-numeric:tabular-nums}
+.res span:nth-child(even){font-weight:800;text-align:right}
+
+#touch{position:fixed;left:0;right:0;bottom:0;padding:0 16px calc(env(safe-area-inset-bottom,0px) + 18px);display:flex;justify-content:space-between;align-items:flex-end;pointer-events:none}
+#touch .pad{display:flex;gap:14px}
+#touch button{pointer-events:auto;width:76px;height:76px;border-radius:50%;background:rgba(255,242,217,.2);border:3px solid rgba(255,242,217,.5);color:var(--cream);font-size:30px;font-weight:800}
+#touch #tJ{width:96px;height:96px;background:rgba(255,134,184,.35);border-color:var(--pink);font-size:19px}
+#touch button.down{background:rgba(255,242,217,.45)}
+@media (prefers-reduced-motion: reduce){#toast,#fade{transition:none}}
+</style>
+
+<div id="game"></div>
+
+<div id="hud" hidden>
+  <div class="hud-row">
+    <div class="track" aria-label="Кто впереди"><span class="mk" id="mkP">💩</span><span class="mk" id="mkA">👧</span><span class="flag">🏁</span></div>
+    <button class="hud-btn" id="muteBtn" aria-label="Звук">♪</button>
+    <button class="hud-btn" id="pauseBtn" aria-label="Пауза">❚❚</button>
+  </div>
+  <div class="stats"><span id="tm">0:00</span><span id="dist">До очистных: — м</span><span id="bub">Пузырей: 0</span><span id="boost" class="boost"></span></div>
+</div>
+<div id="toast"></div>
+<div id="count" hidden></div>
+<div id="caption" hidden></div>
+<div id="touch" hidden>
+  <div class="pad"><button id="tL" aria-label="Влево">◀</button><button id="tR" aria-label="Вправо">▶</button></div>
+  <button id="tJ" aria-label="Прыжок">Прыг!</button>
+</div>
+
+<div id="menu" class="panel">
+  <div class="card">
+    <h1>Анфиса <span>и Какашечка</span></h1>
+    <p>Какашечка прыгнула в унитаз и отправилась путешествовать по трубам. Анфиса за ней! Кто первым добежит до очистных сооружений?</p>
+    <div class="btns diff" role="group" aria-label="Сложность">
+      <button class="btn" id="d0" aria-pressed="true">Легко</button>
+      <button class="btn" id="d1" aria-pressed="false">Нормально</button>
+      <button class="btn" id="d2" aria-pressed="false">Сложно</button>
+    </div>
+    <div class="btns"><button class="btn main" id="startBtn">Начать!</button></div>
+    <div class="keys">
+      <b>← →  или  A D</b><span>бежать влево и вправо</span>
+      <b>Пробел  или  ↑</b><span>прыжок через трубы</span>
+      <b>Пузыри</b><span>собирай, они ускоряют</span>
+      <b>Зелёная слизь</b><span>обходи, в ней бежишь медленно</span>
+    </div>
+    <p class="hint" id="best"></p>
+  </div>
+</div>
+
+<div id="pause" class="panel" hidden>
+  <div class="card">
+    <h2>Пауза</h2>
+    <div class="btns"><button class="btn main" id="resumeBtn">Продолжить</button><button class="btn alt" id="toMenu1">В меню</button></div>
+  </div>
+</div>
+
+<div id="result" class="panel" hidden>
+  <div class="card">
+    <h2 id="resTitle"></h2>
+    <p id="resText"></p>
+    <div class="res" id="resTable"></div>
+    <div class="btns"><button class="btn main" id="againBtn">Ещё раз</button><button class="btn alt" id="toMenu2">В меню</button></div>
+  </div>
+</div>
+<div id="fade"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function(){
+'use strict';
+const V3 = THREE.Vector3;
+const $ = id => document.getElementById(id);
+const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
+const lerp = (a,b,t) => a + (b - a) * t;
+const ease = t => t * t * (3 - 2 * t);
+
+/* ---------- Settings ---------- */
+const R = 3;                 // pipe radius
+const LANE = 2.15;           // how far left/right Anfisa can run
+const START_S = 8;
+const DIFFS = [
+  { name:'Легко',     base:7.0, stumble:0.55, boost:0.30 },
+  { name:'Нормально', base:7.7, stumble:0.35, boost:0.45 },
+  { name:'Сложно',    base:8.3, stumble:0.18, boost:0.60 },
+];
+const ZONES = [
+  { s:0,    name:'Домашняя труба',    col:0xb3c7d3 },
+  { s:650,  name:'Канализация',       col:0x9c7455 },
+  { s:1500, name:'Большой коллектор', col:0x74946a },
+  { s:2300, name:'Почти у очистных',  col:0x62a1a6 },
+];
+let diff = 0;
+
+/* ---------- Renderer ---------- */
+const renderer = new THREE.WebGLRenderer({ antialias:true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+renderer.setSize(innerWidth, innerHeight);
+$('game').appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0b1416);
+scene.fog = new THREE.Fog(0x0b1416, 14, 72);
+const camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.1, 110);
+scene.add(new THREE.HemisphereLight(0xd6ecff, 0x3a2a1a, 0.62));
+const headLight = new THREE.PointLight(0xfff0d0, 0.95, 30, 1.5);
+scene.add(headLight);
+addEventListener('resize', () => {
+  renderer.setSize(innerWidth, innerHeight);
+  camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
+});
+
+/* ---------- Canvas textures ---------- */
+function canvasTex(w, h, draw, rx, ry){
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  draw(c.getContext('2d'), w, h);
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(rx || 1, ry || 1);
+  return t;
+}
+function textTex(text, bg, fg, size){
+  return canvasTex(1024, 256, (g, w, h) => {
+    g.fillStyle = bg; g.fillRect(0, 0, w, h);
+    g.strokeStyle = fg; g.lineWidth = 12; g.strokeRect(10, 10, w - 20, h - 20);
+    g.fillStyle = fg; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.font = (size || 110) + 'px "Rubik Bubbles", "Rubik", sans-serif';
+    g.fillText(text, w / 2, h / 2 + 6, w - 60);
+  });
+}
+const mat = (color, extra) => new THREE.MeshLambertMaterial(Object.assign({ color }, extra || {}));
+const flat = color => new THREE.MeshBasicMaterial({ color });
+
+/* ---------- Seeded random for the track ---------- */
+let seed = 20261007;
+function rnd(){ seed = (seed * 16807) % 2147483647; return seed / 2147483647; }
+const pick = arr => arr[Math.floor(rnd() * arr.length)];
+
+/* ---------- Track curve and frames ---------- */
+const pts = [];
+{ let x = 0, y = 0, z = 0, h = 0;
+  for (let i = 0; i < 60; i++){
+    pts.push(new V3(x, y, z));
+    if (i > 1){ h = clamp(h + (rnd() - 0.5) * 0.8, -1.1, 1.1); y -= 0.5 + rnd() * 2.5; }
+    x += Math.sin(h) * 50; z -= Math.cos(h) * 50;
+  } }
+const curve = new THREE.CatmullRomCurve3(pts, false, 'centripetal');
+const CL = curve.getLength();
+const FINISH = Math.floor(CL - 28);
+const N = Math.floor(CL);
+const UP = new V3(0, 1, 0);
+const FR = [];
+for (let i = 0; i <= N; i++){
+  const u = Math.min(i / CL, 1);
+  const p = curve.getPointAt(u), t = curve.getTangentAt(u).normalize();
+  const r = new V3().crossVectors(t, UP).normalize();
+  const up = new V3().crossVectors(r, t).normalize();
+  FR.push({ p, t, r, u:up });
+}
+const _f = { p:new V3(), t:new V3(), r:new V3(), u:new V3() };
+function frame(s, out){
+  if (s > N - 1.0001){
+    const e = FR[N - 1]; out.t.copy(e.t); out.r.copy(e.r); out.u.copy(e.u);
+    out.p.copy(e.p).addScaledVector(e.t, s - (N - 1)); return out;
+  }
+  s = clamp(s, 0, N - 1.0001);
+  const i = Math.floor(s), k = s - i, a = FR[i], b = FR[i + 1];
+  out.p.lerpVectors(a.p, b.p, k);
+  out.t.lerpVectors(a.t, b.t, k).normalize();
+  out.r.lerpVectors(a.r, b.r, k).normalize();
+  out.u.lerpVectors(a.u, b.u, k).normalize();
+  return out;
+}
+const floorY = x => -Math.sqrt(R * R - x * x);
+function worldPos(s, x, h, out){
+  frame(s, _f);
+  return out.copy(_f.p).addScaledVector(_f.r, x).addScaledVector(_f.u, floorY(x) + h);
+}
+const _m = new THREE.Matrix4(), _back = new V3();
+function place(obj, s, x, h){
+  worldPos(s, x, h, obj.position);
+  _m.makeBasis(_f.r, _f.u, _back.copy(_f.t).negate());
+  obj.quaternion.setFromRotationMatrix(_m);
+}
+function zoneAt(s){ let k = 0; for (let i = 0; i < ZONES.length; i++) if (s >= ZONES[i].s) k = i; return k; }
+
+/* ---------- Characters ---------- */
+function makeGirl(){
+  const g = new THREE.Group();
+  const skin = mat(0xffd2b3), dress = mat(0xff6fae, { emissive:0x40102a }), hair = mat(0x9a5226), white = mat(0xffffff), dark = flat(0x1d1d1d);
+  const legGeo = new THREE.CylinderGeometry(0.075, 0.07, 0.5, 8); legGeo.translate(0, -0.25, 0);
+  const shoeGeo = new THREE.BoxGeometry(0.14, 0.08, 0.22); shoeGeo.translate(0, -0.5, -0.04);
+  const legs = [-0.1, 0.1].map(x => {
+    const l = new THREE.Mesh(legGeo, skin); l.position.set(x, 0.55, 0);
+    l.add(new THREE.Mesh(shoeGeo, white)); g.add(l); return l;
+  });
+  const skirt = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.4, 0.5, 14), dress); skirt.position.y = 0.74; g.add(skirt);
+  const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.16, 0.32, 12), dress); torso.position.y = 1.1; g.add(torso);
+  const armGeo = new THREE.CylinderGeometry(0.055, 0.05, 0.42, 8); armGeo.translate(0, -0.21, 0);
+  const arms = [-1, 1].map(sd => {
+    const a = new THREE.Mesh(armGeo, skin); a.position.set(sd * 0.21, 1.22, 0); a.rotation.z = sd * 0.25; g.add(a); return a;
+  });
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.25, 18, 14), skin); head.position.y = 1.5; g.add(head);
+  const cap = new THREE.Mesh(new THREE.SphereGeometry(0.27, 18, 12, 0, Math.PI * 2, 0, Math.PI * 0.6), hair);
+  cap.position.y = 1.52; cap.rotation.x = 0.35; g.add(cap);
+  const back = new THREE.Mesh(new THREE.SphereGeometry(0.26, 14, 10), hair); back.scale.set(1, 1.15, 0.6); back.position.set(0, 1.42, 0.1); g.add(back);
+  [-1, 1].forEach(sd => {
+    const tail = new THREE.Mesh(new THREE.SphereGeometry(0.11, 10, 8), hair); tail.scale.set(0.8, 1.5, 0.8); tail.position.set(sd * 0.3, 1.36, 0.06); g.add(tail);
+    const bow = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 6), dress); bow.position.set(sd * 0.27, 1.52, 0.04); g.add(bow);
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.035, 8, 6), dark); eye.position.set(sd * 0.085, 1.53, -0.22); g.add(eye);
+    const cheek = new THREE.Mesh(new THREE.SphereGeometry(0.04, 8, 6), flat(0xff9cb5)); cheek.position.set(sd * 0.14, 1.45, -0.2); g.add(cheek);
+  });
+  const smile = new THREE.Mesh(new THREE.TorusGeometry(0.06, 0.014, 6, 12, Math.PI), flat(0xb03050));
+  smile.position.set(0, 1.44, -0.235); smile.rotation.z = Math.PI; g.add(smile);
+  g.userData = { legs, arms };
+  return g;
+}
+function makePoo(){
+  const g = new THREE.Group(), body = new THREE.Group(); g.add(body);
+  const m = mat(0x8e5a2a, { emissive:0x2a1406 });
+  const ring = (rad, tube, y) => { const t = new THREE.Mesh(new THREE.TorusGeometry(rad, tube, 10, 22), m); t.rotation.x = Math.PI / 2; t.position.y = y; body.add(t); };
+  ring(0.36, 0.18, 0.18); ring(0.26, 0.15, 0.43); ring(0.15, 0.12, 0.64);
+  const core = new THREE.Mesh(new THREE.SphereGeometry(0.3, 12, 10), m); core.position.y = 0.32; body.add(core);
+  const tip = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.28, 10), m); tip.position.set(0.03, 0.85, 0); tip.rotation.z = -0.4; body.add(tip);
+  [-1, 1].forEach(sd => {
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.095, 10, 8), flat(0xffffff)); eye.position.set(sd * 0.12, 0.56, -0.33); body.add(eye);
+    const pup = new THREE.Mesh(new THREE.SphereGeometry(0.048, 8, 6), flat(0x111111)); pup.position.set(sd * 0.12, 0.56, -0.415); body.add(pup);
+  });
+  const mouth = new THREE.Mesh(new THREE.TorusGeometry(0.08, 0.02, 6, 12, Math.PI), flat(0xff6f8e));
+  mouth.position.set(0, 0.38, -0.4); mouth.rotation.z = Math.PI; body.add(mouth);
+  g.userData = { body };
+  return g;
+}
+const girl = makeGirl(), poo = makePoo();
+scene.add(girl, poo);
+function animGirl(phase, k, air){
+  const d = girl.userData;
+  const sw = air ? 0 : Math.sin(phase) * 0.9 * k;
+  d.legs[0].rotation.x = air ? -0.7 : sw; d.legs[1].rotation.x = air ? 0.3 : -sw;
+  d.arms[0].rotation.x = air ? -2.4 : -sw * 0.8; d.arms[1].rotation.x = air ? -2.4 : sw * 0.8;
+}
+function animPoo(phase, k){
+  const b = poo.userData.body, hop = Math.abs(Math.sin(phase));
+  b.position.y = hop * 0.35 * k;
+  const sq = 1 - (1 - hop) * 0.18 * k;
+  b.scale.set(1 / Math.sqrt(sq), sq, 1 / Math.sqrt(sq));
+}
+
+/* ---------- World ---------- */
+const obstacles = [];
+let room = null;
+
+function buildWorld(){
+  // Pipe
+  const tubular = Math.floor(CL / 1.2), radial = 18;
+  const tubeGeo = new THREE.TubeGeometry(curve, tubular, R, radial, false);
+  const colors = [], c = new THREE.Color(), c2 = new THREE.Color();
+  for (let i = 0; i <= tubular; i++){
+    const s = i / tubular * CL, k = zoneAt(s);
+    c.setHex(ZONES[k].col);
+    if (k > 0 && s - ZONES[k].s < 40){ c2.setHex(ZONES[k - 1].col); c.lerp(c2, 1 - (s - ZONES[k].s) / 40); }
+    for (let j = 0; j <= radial; j++) colors.push(c.r, c.g, c.b);
+  }
+  tubeGeo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+  const pipeTex = canvasTex(128, 128, (g, w, h) => {
+    g.fillStyle = '#d2d2d2'; g.fillRect(0, 0, w, h);
+    for (let i = 0; i < 260; i++){ g.fillStyle = `rgba(60,50,40,${Math.random() * 0.22})`; g.fillRect(Math.random() * w, Math.random() * h, 2 + Math.random() * 5, 2 + Math.random() * 5); }
+    g.fillStyle = '#9a9a9a'; g.fillRect(0, 0, 10, h);
+    g.fillStyle = '#c4c4c4'; g.fillRect(0, h / 2 - 2, w, 4);
+  }, CL / 5, 3);
+  scene.add(new THREE.Mesh(tubeGeo, mat(0xffffff, { map:pipeTex, vertexColors:true, side:THREE.BackSide })));
+
+  // Water stream on the floor
+  const WY = -R + 0.32, WW = Math.sqrt(R * R - WY * WY) - 0.03;
+  const n = Math.floor(CL / 2), pos = [], uv = [], idx = [], a = new V3(), b = new V3();
+  for (let i = 0; i <= n; i++){
+    const s = i * CL / n; frame(s, _f);
+    a.copy(_f.p).addScaledVector(_f.r, -WW).addScaledVector(_f.u, WY);
+    b.copy(_f.p).addScaledVector(_f.r, WW).addScaledVector(_f.u, WY);
+    pos.push(a.x, a.y, a.z, b.x, b.y, b.z); uv.push(0, s / 6, 1, s / 6);
+    if (i < n){ const q = i * 2; idx.push(q, q + 2, q + 1, q + 1, q + 2, q + 3); }
+  }
+  const wGeo = new THREE.BufferGeometry();
+  wGeo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  wGeo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  wGeo.setIndex(idx); wGeo.computeVertexNormals();
+  waterTex = canvasTex(64, 128, (g, w, h) => {
+    g.fillStyle = '#a9e3d8'; g.fillRect(0, 0, w, h);
+    g.strokeStyle = 'rgba(255,255,255,.75)'; g.lineWidth = 3;
+    for (let k = 0; k < 5; k++){ g.beginPath(); const y0 = Math.random() * h; for (let x = 0; x <= w; x += 4) g.lineTo(x, y0 + Math.sin(x / 9 + k) * 4); g.stroke(); }
+  });
+  scene.add(new THREE.Mesh(wGeo, mat(0x3a9c8c, { map:waterTex, transparent:true, opacity:0.9, emissive:0x0b2e29, side:THREE.DoubleSide })));
+
+  // Pipe joints, ceiling lamps, side holes (instanced = cheap)
+  const dummy = new THREE.Object3D();
+  const rings = new THREE.InstancedMesh(new THREE.TorusGeometry(R - 0.04, 0.09, 6, 28), mat(0x56615f), Math.floor(CL / 10));
+  for (let i = 0; i < rings.count; i++){ place(dummy, i * 10 + 5, 0, 0); dummy.position.copy(_f.p); dummy.updateMatrix(); rings.setMatrixAt(i, dummy.matrix); }
+  scene.add(rings);
+  const lamps = new THREE.InstancedMesh(new THREE.SphereGeometry(0.2, 8, 6), flat(0xffe3a0), Math.floor(CL / 18));
+  for (let i = 0; i < lamps.count; i++){ frame(i * 18 + 9, _f); dummy.position.copy(_f.p).addScaledVector(_f.u, R - 0.12); dummy.quaternion.identity(); dummy.updateMatrix(); lamps.setMatrixAt(i, dummy.matrix); }
+  scene.add(lamps);
+  const holes = new THREE.InstancedMesh(new THREE.CircleGeometry(0.55, 16), flat(0x0a0f10), Math.floor(CL / 23));
+  for (let i = 0; i < holes.count; i++){
+    frame(i * 23 + 15, _f); const sd = rnd() < 0.5 ? -1 : 1;
+    dummy.position.copy(_f.p).addScaledVector(_f.r, sd * (R - 0.04)).addScaledVector(_f.u, 0.5);
+    dummy.lookAt(_f.p.x, _f.p.y + 0.5, _f.p.z); dummy.updateMatrix(); holes.setMatrixAt(i, dummy.matrix);
+  }
+  scene.add(holes);
+
+  // Start: back wall and the bright hole from the toilet above
+  frame(0, _f);
+  const cap = new THREE.Mesh(new THREE.CircleGeometry(R, 24), mat(0x6d7f86));
+  cap.position.copy(_f.p); cap.lookAt(_f.p.clone().add(_f.t)); scene.add(cap);
+  frame(START_S, _f);
+  const hole = new THREE.Mesh(new THREE.CircleGeometry(1.1, 24), flat(0xe8f6ff));
+  hole.position.copy(_f.p).addScaledVector(_f.u, R - 0.06); hole.lookAt(_f.p); scene.add(hole);
+  const sign0 = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 0.9), new THREE.MeshBasicMaterial({ map:textTex('Старт!', '#16292d', '#ff86b8'), fog:true }));
+  place(sign0, START_S + 9, 0, 2.6); scene.add(sign0);
+
+  // Zone signs
+  ZONES.slice(1).forEach(z => {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(4.2, 1.05), new THREE.MeshBasicMaterial({ map:textTex(z.name, '#16292d', '#fff2d9', 92) }));
+    place(m, z.s, 0, 2.55); scene.add(m);
+  });
+
+  // Obstacles
+  const barTex = canvasTex(32, 64, (g, w, h) => { for (let y = 0; y < h; y += 16){ g.fillStyle = (y / 16) % 2 ? '#1d1d1d' : '#f2c230'; g.fillRect(0, y, w, 16); } }, 1, 3);
+  const barGeo = new THREE.CylinderGeometry(0.17, 0.17, 1, 12); barGeo.rotateZ(Math.PI / 2);
+  const barMat = mat(0xffffff, { map:barTex });
+  const slimeGeo = new THREE.SphereGeometry(1, 18, 8);
+  const slimeMat = mat(0x8fd14f, { emissive:0x1f4a0b, transparent:true, opacity:0.92 });
+  const bubGeo = new THREE.SphereGeometry(0.3, 14, 10);
+  const bubMat = mat(0xaeeeff, { emissive:0x2c8fb0, transparent:true, opacity:0.6 });
+  let s = 70;
+  while (s < FINISH - 40){
+    const r = rnd(), early = s < 350;
+    if (r < (early ? 0.25 : 0.42)){
+      const o = { type:'bar', s, x:pick([-1.2, 0, 1.2]), w:2.3 };
+      o.mesh = new THREE.Mesh(barGeo, barMat); o.mesh.scale.x = o.w;
+      place(o.mesh, s, o.x, 0.42); scene.add(o.mesh); obstacles.push(o);
+      if (!early && rnd() < 0.4){ const bx = o.x <= 0 ? 1.7 : -1.7; addBubble(s, bx); }
+    } else if (r < (early ? 0.35 : 0.62)){
+      const o = { type:'slime', s, x:pick([-1, 0, 1]), len:5.2, hw:0.9 };
+      o.mesh = new THREE.Mesh(slimeGeo, slimeMat); o.mesh.scale.set(o.hw, 0.07, o.len / 2);
+      place(o.mesh, s + o.len / 2, o.x, Math.max(WY - floorY(o.x), 0) + 0.03); scene.add(o.mesh); obstacles.push(o);
+    } else {
+      const x = pick([-1.6, -0.8, 0, 0.8, 1.6]);
+      for (let k = 0; k < 3; k++) addBubble(s + k * 2.8, x);
+      s += 6;
+    }
+    s += (early ? 20 : 11) + rnd() * 10;
+  }
+  function addBubble(bs, x){
+    const o = { type:'bub', s:bs, x, mesh:new THREE.Mesh(bubGeo, bubMat) };
+    place(o.mesh, bs, x, 0.95); o.base = o.mesh.position.clone(); scene.add(o.mesh); obstacles.push(o);
+  }
+  obstacles.sort((p, q) => p.s - q.s);
+
+  // Finish line
+  const flagTex = canvasTex(64, 64, (g) => { for (let y = 0; y < 4; y++) for (let x = 0; x < 4; x++){ g.fillStyle = (x + y) % 2 ? '#111' : '#fff'; g.fillRect(x * 16, y * 16, 16, 16); } }, 6, 1);
+  const finBanner = new THREE.Mesh(new THREE.PlaneGeometry(4.4, 1.1), new THREE.MeshBasicMaterial({ map:textTex('ФИНИШ', '#ffffff', '#111111', 130) }));
+  place(finBanner, FINISH, 0, 2.6); scene.add(finBanner);
+  const stripGeo = new THREE.PlaneGeometry(4.2, 0.8); stripGeo.rotateX(-Math.PI / 2);
+  const strip = new THREE.Mesh(stripGeo, new THREE.MeshBasicMaterial({ map:flagTex }));
+  place(strip, FINISH, 0, WY + R + 0.03); scene.add(strip);
+
+  // Treatment plant room at the end of the pipe
+  frame(CL - 0.5, _f);
+  const tFlat = new V3(_f.t.x, 0, _f.t.z).normalize();
+  const center = _f.p.clone().add(new V3(0, -R + 8, 0)).addScaledVector(tFlat, 18);
+  room = new THREE.Group(); room.position.copy(center); room.lookAt(center.clone().add(tFlat)); scene.add(room);
+  const wallMat = mat(0x9fb4b8, { side:THREE.DoubleSide, fog:false });
+  const plane = (w, h, x, y, z, rx, ry, m) => { const q = new THREE.Mesh(new THREE.PlaneGeometry(w, h), m || wallMat); q.position.set(x, y, z); q.rotation.set(rx, ry, 0); room.add(q); };
+  plane(34, 36, 0, -8, 0, -Math.PI / 2, 0, mat(0x6f8a8e, { side:THREE.DoubleSide, fog:false }));
+  plane(34, 36, 0, 8, 0, Math.PI / 2, 0);
+  plane(36, 16, -17, 0, 0, 0, Math.PI / 2); plane(36, 16, 17, 0, 0, 0, -Math.PI / 2);
+  plane(34, 16, 0, 0, 18, 0, Math.PI);
+  const shape = new THREE.Shape(); shape.moveTo(-17, -8); shape.lineTo(17, -8); shape.lineTo(17, 8); shape.lineTo(-17, 8); shape.lineTo(-17, -8);
+  const holePath = new THREE.Path(); holePath.absarc(0, -5, R, 0, Math.PI * 2, true); shape.holes.push(holePath);
+  const backWall = new THREE.Mesh(new THREE.ShapeGeometry(shape, 24), wallMat); backWall.position.z = -18; room.add(backWall);
+  const welcome = new THREE.Mesh(new THREE.PlaneGeometry(12, 3), new THREE.MeshBasicMaterial({ map:textTex('Добро пожаловать!', '#ff86b8', '#16292d', 96), fog:false }));
+  welcome.position.set(0, 1.5, -17.9); room.add(welcome);
+  [[-9, 3], [9, 3], [0, 11]].forEach(([x, z]) => {
+    const tank = new THREE.Mesh(new THREE.CylinderGeometry(4, 4, 3, 28), mat(0xc9d3d6, { fog:false })); tank.position.set(x, -6.5, z); room.add(tank);
+    const top = new THREE.Mesh(new THREE.CircleGeometry(3.7, 28), mat(0x5fd1ff, { emissive:0x1b6f8f, fog:false })); top.rotation.x = -Math.PI / 2; top.position.set(x, -4.95, z); room.add(top);
+  });
+  const big = new THREE.Mesh(new THREE.PlaneGeometry(16, 4), new THREE.MeshBasicMaterial({ map:textTex('ОЧИСТНЫЕ СООРУЖЕНИЯ', '#1b6f8f', '#ffffff', 84), fog:false }));
+  big.position.set(0, 3, 17.9); big.rotation.y = Math.PI; room.add(big);
+  const roomLight = new THREE.PointLight(0xffffff, 1.6, 60, 1); roomLight.position.set(0, 5, 2); room.add(roomLight);
+}
+let waterTex = null;
+
+/* ---------- Bathroom for the intro ---------- */
+const BATH = new THREE.Group(); BATH.position.set(0, 400, 0); scene.add(BATH);
+const BOWL = new V3(0, 0.86, -2.6);
+let swirl = null;
+(function buildBath(){
+  const tile = canvasTex(64, 64, (g) => { g.fillStyle = '#e7f3f8'; g.fillRect(0, 0, 64, 64); g.fillStyle = '#a9cfe0'; g.fillRect(0, 0, 32, 32); g.fillRect(32, 32, 32, 32); }, 8, 8);
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(14, 14), mat(0xffffff, { map:tile })); floor.rotation.x = -Math.PI / 2; BATH.add(floor);
+  const wall = new THREE.Mesh(new THREE.PlaneGeometry(14, 7), mat(0xbfe0d8)); wall.position.set(0, 3.5, -4); BATH.add(wall);
+  const side = new THREE.Mesh(new THREE.PlaneGeometry(14, 7), mat(0xa7d2c8)); side.position.set(-4, 3.5, 0); side.rotation.y = Math.PI / 2; BATH.add(side);
+  const white = mat(0xffffff, { emissive:0x222222 });
+  const T = new THREE.Group(); T.position.set(0, 0, -2.6); BATH.add(T);
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.34, 0.42, 20), white); base.position.y = 0.21; T.add(base);
+  const bowl = new THREE.Mesh(new THREE.LatheGeometry([new THREE.Vector2(0.28, 0.4), new THREE.Vector2(0.46, 0.5), new THREE.Vector2(0.57, 0.66), new THREE.Vector2(0.6, 0.82)], 24), mat(0xffffff, { emissive:0x222222, side:THREE.DoubleSide }));
+  T.add(bowl);
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(0.6, 0.07, 8, 28), mat(0xffc6dc)); rim.rotation.x = Math.PI / 2; rim.position.y = 0.84; T.add(rim);
+  swirl = new THREE.Mesh(new THREE.CircleGeometry(0.5, 24), mat(0xffffff, { map:canvasTex(128, 128, (g, w, h) => {
+    g.fillStyle = '#4bb6e0'; g.fillRect(0, 0, w, h); g.strokeStyle = '#d8f4ff'; g.lineWidth = 5; g.beginPath();
+    for (let a = 0; a < 18; a += 0.1){ const rr = a * 3.4; g.lineTo(64 + Math.cos(a) * rr, 64 + Math.sin(a) * rr); } g.stroke();
+  }) }));
+  swirl.rotation.x = -Math.PI / 2; swirl.position.y = 0.6; T.add(swirl);
+  const tank = new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.8, 0.34), white); tank.position.set(0, 1.25, -0.58); T.add(tank);
+  const btn = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.05, 14), mat(0xc0c0c0)); btn.position.set(0, 1.67, -0.58); T.add(btn);
+  const lamp = new THREE.PointLight(0xfff4e0, 1.3, 16, 1.2); lamp.position.set(1, 3.5, 1); BATH.add(lamp);
+})();
+
+/* ---------- Sound (tiny synth, no files) ---------- */
+let AC = null, muted = false;
+function audio(){
+  if (!AC){ try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { AC = null; } }
+  if (AC && AC.state === 'suspended') AC.resume();
+  return AC;
+}
+function tone(f1, f2, dur, type, vol, delay){
+  if (!AC || muted) return;
+  const t = AC.currentTime + (delay || 0), o = AC.createOscillator(), g = AC.createGain();
+  o.type = type || 'sine'; o.frequency.setValueAtTime(f1, t); o.frequency.exponentialRampToValueAtTime(f2, t + dur);
+  g.gain.setValueAtTime(vol || 0.12, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  o.connect(g); g.connect(AC.destination); o.start(t); o.stop(t + dur + 0.03);
+}
+function noise(dur, vol, freq){
+  if (!AC || muted) return;
+  const len = Math.floor(AC.sampleRate * dur), buf = AC.createBuffer(1, len, AC.sampleRate), d = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+  const src = AC.createBufferSource(), f = AC.createBiquadFilter(), g = AC.createGain();
+  src.buffer = buf; f.type = 'lowpass'; f.frequency.value = freq || 900; g.gain.value = vol || 0.2;
+  src.connect(f); f.connect(g); g.connect(AC.destination); src.start();
+}
+const sfx = {
+  jump:  () => tone(380, 760, 0.15, 'square', 0.06),
+  boost: () => { tone(660, 660, 0.08, 'triangle', 0.12); tone(880, 880, 0.08, 'triangle', 0.12, 0.08); tone(1320, 1320, 0.14, 'triangle', 0.12, 0.16); },
+  hit:   () => tone(230, 70, 0.32, 'sawtooth', 0.1),
+  plop:  () => tone(720, 110, 0.3, 'sine', 0.25),
+  flush: () => noise(1.5, 0.28, 700),
+  splash:() => noise(0.35, 0.2, 1600),
+  beep:  () => tone(520, 520, 0.15, 'square', 0.07),
+  go:    () => tone(1040, 1040, 0.35, 'square', 0.08),
+  drip:  () => tone(1500, 420, 0.09, 'sine', 0.035),
+  win:   () => [523, 659, 784, 1046].forEach((f, i) => tone(f, f, 0.24, 'triangle', 0.13, i * 0.14)),
+  lose:  () => [392, 349, 330, 262].forEach((f, i) => tone(f, f, 0.3, 'triangle', 0.11, i * 0.18)),
+};
+
+/* ---------- Input ---------- */
+const keys = { left:false, right:false };
+let jumpQueued = 0;
+const keyMap = { ArrowLeft:'left', KeyA:'left', ArrowRight:'right', KeyD:'right' };
+addEventListener('keydown', e => {
+  if (keyMap[e.code]){ keys[keyMap[e.code]] = true; e.preventDefault(); }
+  if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW'){ jumpQueued = 0.18; e.preventDefault(); if (state === 'intro') skipIntro(); }
+  if ((e.code === 'Escape' || e.code === 'KeyP') && state === 'race') setPaused(!paused);
+  if (e.code === 'Enter' && state === 'intro') skipIntro();
+});
+addEventListener('keyup', e => { if (keyMap[e.code]) keys[keyMap[e.code]] = false; });
+function holdBtn(el, on, off){
+  const down = e => { e.preventDefault(); el.classList.add('down'); on(); };
+  const up = e => { e.preventDefault(); el.classList.remove('down'); off && off(); };
+  el.addEventListener('pointerdown', down);
+  ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => el.addEventListener(ev, up));
+}
+holdBtn($('tL'), () => keys.left = true, () => keys.left = false);
+holdBtn($('tR'), () => keys.right = true, () => keys.right = false);
+holdBtn($('tJ'), () => jumpQueued = 0.18);
+const isTouch = ('ontouchstart' in window) || matchMedia('(pointer: coarse)').matches;
+
+/* ---------- UI helpers ---------- */
+let toastTimer = 0;
+function toast(text, sec){ const t = $('toast'); t.textContent = text; t.classList.add('on'); toastTimer = sec || 1.8; }
+function fmt(t){ const m = Math.floor(t / 60), s = Math.floor(t % 60); return m + ':' + String(s).padStart(2, '0'); }
+function bestKey(){ return 'anfisa-best-' + diff; }
+function getBest(){ try { const v = parseFloat(localStorage.getItem(bestKey())); return isFinite(v) ? v : null; } catch (e) { return null; } }
+function setBest(v){ try { localStorage.setItem(bestKey(), String(v)); } catch (e) {} }
+function showBest(){ const b = getBest(); $('best').textContent = b ? `Лучшее время Анфисы (${DIFFS[diff].name.toLowerCase()}): ${fmt(b)}` : 'Гонка длится примерно 5–7 минут.'; }
+[0, 1, 2].forEach(i => $('d' + i).addEventListener('click', () => {
+  diff = i; [0, 1, 2].forEach(j => $('d' + j).setAttribute('aria-pressed', String(j === i))); showBest();
+}));
+showBest();
+$('muteBtn').addEventListener('click', () => { muted = !muted; $('muteBtn').textContent = muted ? '×' : '♪'; });
+$('pauseBtn').addEventListener('click', () => setPaused(true));
+$('resumeBtn').addEventListener('click', () => setPaused(false));
+$('toMenu1').addEventListener('click', toMenu);
+$('toMenu2').addEventListener('click', toMenu);
+$('againBtn').addEventListener('click', () => { $('result').hidden = true; startDrop(); });
+$('startBtn').addEventListener('click', () => { audio(); if (worldReady) startIntro(); else pendingStart = true; });
+$('caption').addEventListener('click', () => { if (state === 'intro') skipIntro(); });
+$('game').addEventListener('pointerdown', () => { if (state === 'intro') skipIntro(); });
+document.addEventListener('visibilitychange', () => { if (document.hidden && state === 'race') setPaused(true); });
+
+/* ---------- Game state ---------- */
+let state = 'menu', paused = false, raceT = 0, stateT = 0, worldReady = false, pendingStart = false, dripT = 3;
+const P = {}, A = {};
+function resetRacers(){
+  Object.assign(P, { s:START_S, x:0.9, h:7, vy:0, speed:0, boostT:0, stumbleT:0, phase:0, lean:0, bub:0, hits:0, done:false, time:0, zone:0, next:0 });
+  Object.assign(A, { s:START_S, x:-0.9, h:7.6, vy:0, speed:0, boostT:0, stumbleT:0, slimeT:0, phase:0, tx:-0.9, done:false, time:0, next:0, told:false });
+  obstacles.forEach(o => { o.hitP = false; o.takenP = false; if (o.type === 'bub') o.mesh.visible = true; });
+  girl.scale.setScalar(1); poo.scale.setScalar(1); girl.visible = true; poo.visible = true;
+  raceT = 0;
+}
+function setPaused(v){ if (state !== 'race' && v) return; paused = v; $('pause').hidden = !v; }
+function toMenu(){
+  paused = false; state = 'menu';
+  ['pause', 'result', 'hud', 'touch', 'caption', 'count'].forEach(id => $(id).hidden = true);
+  $('menu').hidden = false; showBest(); bathPose(); introCam();
+}
+function introCam(){
+  camera.position.copy(BATH.position).add(new V3(0.7, 2.3, 2.7));
+  camera.up.set(0, 1, 0); camera.lookAt(BATH.position.clone().add(new V3(0, 0.7, -2.2)));
+}
+
+/* Intro: Kakashechka and Anfisa jump into the toilet */
+const PO_START = new V3(1.5, 0, -1.4), GI_START = new V3(-1.5, 0, -1.1);
+function startIntro(){
+  $('menu').hidden = true; state = 'intro'; stateT = 0;
+  bathPose(); introCam(); caption('Жила-была Какашечка. Однажды она решила отправиться в путешествие…');
+}
+function bathPose(){
+  resetRacers();
+  poo.position.copy(BATH.position).add(PO_START); poo.rotation.set(0, Math.PI - 0.5, 0); poo.scale.setScalar(0.5);
+  girl.position.copy(BATH.position).add(GI_START); girl.rotation.set(0, Math.PI + 0.4, 0); girl.scale.setScalar(0.85);
+  animGirl(0, 0, false); animPoo(0, 0); swirl.rotation.z = 0;
+}
+let capStage = -1;
+function caption(text){ const c = $('caption'); c.hidden = false; c.innerHTML = text + '<small>Нажми, чтобы пропустить</small>'; }
+function hopTo(obj, from, to, k, height){
+  obj.position.copy(BATH.position).add(from.clone().lerp(to, k)); obj.position.y += 4 * height * k * (1 - k);
+}
+function updateIntro(dt){
+  stateT += dt; const t = stateT;
+  if (t > 1.2 && t < 2.2){ hopTo(poo, PO_START, BOWL, ease((t - 1.2) / 1.0), 1.1); animPoo(t * 9, 1); }
+  if (t >= 2.2 && capStage < 1){ capStage = 1; sfx.plop(); caption('ПЛЮХ! Какашечка нырнула в унитаз!'); }
+  if (t >= 2.2 && t < 2.7){ const k = (t - 2.2) / 0.5; poo.scale.setScalar(0.5 * (1 - k) + 0.001); poo.position.y = BATH.position.y + BOWL.y - k * 0.3; }
+  if (t >= 2.7) poo.visible = false;
+  if (t >= 3.3 && capStage < 2){ capStage = 2; caption('Анфиса не растерялась: она стала совсем маленькой и прыгнула следом!'); }
+  if (t > 3.3 && t < 3.9) girl.scale.setScalar(lerp(0.85, 0.32, ease((t - 3.3) / 0.6)));
+  if (t > 4.0 && t < 5.0){ hopTo(girl, GI_START, BOWL, ease((t - 4.0) / 1.0), 1.0); animGirl(0, 0, true); }
+  if (t >= 5.0 && capStage < 3){ capStage = 3; sfx.plop(); }
+  if (t >= 5.0 && t < 5.4){ const k = (t - 5.0) / 0.4; girl.scale.setScalar(0.32 * (1 - k) + 0.001); }
+  if (t >= 5.4) girl.visible = false;
+  if (t >= 5.6 && capStage < 4){ capStage = 4; sfx.flush(); caption('Вжу-у-ух! Смыв! Гонка начинается!'); }
+  if (t >= 5.6) swirl.rotation.z += dt * 9;
+  if (t >= 6.4 && capStage < 5){ capStage = 5; $('fade').style.opacity = 1; }
+  if (t >= 7.0) startDrop();
+}
+function skipIntro(){ if (state === 'intro'){ sfx.flush(); startDrop(); } }
+
+/* Drop into the pipe, then countdown */
+function startDrop(){
+  capStage = -1; $('caption').hidden = true; $('fade').style.opacity = 0;
+  resetRacers(); state = 'drop'; stateT = 0; paused = false;
+  $('hud').hidden = false; $('touch').hidden = !isTouch; $('result').hidden = true;
+  updateHud(); placeRacers(); followCam(1);
+}
+let countStage = 0;
+function updateDrop(dt){
+  stateT += dt;
+  [P, A].forEach(r => {
+    if (r.h > 0){ r.vy -= 22 * dt; r.h += r.vy * dt; if (r.h <= 0){ r.h = 0; r.vy = 0; sfx.splash(); } }
+  });
+  if (P.h === 0 && A.h === 0 && stateT > 1.2){ state = 'count'; stateT = 0; countStage = 0; $('count').hidden = false; }
+  placeRacers(); animGirl(0, 0, P.h > 0); animPoo(0, 0); followCam(dt);
+}
+function updateCount(dt){
+  stateT += dt;
+  const stage = Math.floor(stateT);
+  if (stage >= countStage && countStage < 4){
+    $('count').textContent = ['3', '2', '1', 'Бегом!'][countStage];
+    countStage < 3 ? sfx.beep() : sfx.go(); countStage++;
+  }
+  if (stateT > 3.0 && state === 'count'){ state = 'race'; stateT = 0; }
+  placeRacers(); animPoo(stateT * 4, 0.3); followCam(dt);
+}
+
+/* Race */
+function update(dt){
+  if (toastTimer > 0){ toastTimer -= dt; if (toastTimer <= 0) $('toast').classList.remove('on'); }
+  if (waterTex) waterTex.offset.y -= dt * 0.9;
+  if (state === 'intro') return updateIntro(dt);
+  if (state === 'drop') return updateDrop(dt);
+  if (state === 'count') return updateCount(dt);
+  if (state !== 'race' && state !== 'finished') return;
+  raceT += dt;
+  if (state === 'race'){
+    stateT += dt;
+    if (stateT > 1.2) $('count').hidden = true;
+  }
+  updatePlayer(dt); updateAI(dt); updateBubbles(dt);
+  placeRacers(); followCam(dt); updateHud();
+  dripT -= dt; if (dripT < 0){ sfx.drip(); dripT = 2 + Math.random() * 4; }
+  if (state === 'finished'){ stateT += dt; if (stateT > 1.6 && $('result').hidden) showResult(); }
+}
+function updatePlayer(dt){
+  const D = DIFFS[diff];
+  P.boostT = Math.max(0, P.boostT - dt); P.stumbleT = Math.max(0, P.stumbleT - dt); jumpQueued = Math.max(0, jumpQueued - dt);
+  // collisions with nearby obstacles
+  let inSlime = false;
+  while (P.next < obstacles.length && obstacles[P.next].s + 6 < P.s) P.next++;
+  for (let i = P.next; i < obstacles.length && obstacles[i].s < P.s + 1.5; i++){
+    const o = obstacles[i], ds = P.s - o.s, dx = Math.abs(P.x - o.x);
+    if (o.type === 'bar' && !o.hitP && Math.abs(ds) < 0.45 && dx < o.w / 2 + 0.22 && P.h < 0.55 && !P.done){
+      o.hitP = true; P.stumbleT = 0.9; P.hits++; sfx.hit(); toast(pick(['Ой!', 'Бамс!', 'Ай-ай!']), 0.9);
+    } else if (o.type === 'slime' && ds > 0 && ds < o.len && dx < o.hw + 0.15 && P.h < 0.1){
+      inSlime = true;
+    } else if (o.type === 'bub' && !o.takenP && Math.abs(ds) < 0.8 && dx < 0.75){
+      o.takenP = true; o.mesh.visible = false; P.bub++; P.boostT = 2.2; sfx.boost();
+    }
+  }
+  let target = 8;
+  if (P.boostT > 0) target = 13;
+  if (inSlime) target *= 0.5;
+  if (P.stumbleT > 0) target = 2.2;
+  if (P.done) target = P.s > CL + 4 ? 0 : 5;
+  if (state !== 'race' && !P.done) target = 0;
+  P.speed = lerp(P.speed, target, 1 - Math.exp(-dt * (P.stumbleT > 0 ? 10 : 3)));
+  P.s = Math.min(P.s + P.speed * dt, CL + 6);
+  const dir = P.done ? 0 : (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
+  P.x = P.done ? lerp(P.x, 0.9, 1 - Math.exp(-dt * 2)) : clamp(P.x + dir * 5 * dt, -LANE, LANE);
+  P.lean = lerp(P.lean, -dir * 0.16, 1 - Math.exp(-dt * 10));
+  if (jumpQueued > 0 && P.h === 0 && P.stumbleT <= 0){ P.vy = 7.4; jumpQueued = 0; sfx.jump(); }
+  if (P.h > 0 || P.vy > 0){ P.h += P.vy * dt; P.vy -= 20 * dt; if (P.h <= 0){ P.h = 0; P.vy = 0; } }
+  P.phase += P.speed * dt * 1.7;
+  // zones
+  const z = zoneAt(P.s);
+  if (z !== P.zone){ P.zone = z; toast(ZONES[z].name, 2.2); }
+  // finish
+  if (!P.done && P.s >= FINISH){
+    P.done = true; P.time = raceT;
+    state = 'finished'; stateT = 0;
+    if (!A.done) sfx.win(); else sfx.lose();
+  }
+}
+function updateAI(dt){
+  const D = DIFFS[diff];
+  A.boostT = Math.max(0, A.boostT - dt); A.stumbleT = Math.max(0, A.stumbleT - dt); A.slimeT = Math.max(0, A.slimeT - dt);
+  while (A.next < obstacles.length && obstacles[A.next].s < A.s + 1){
+    const o = obstacles[A.next++];
+    if (o.type === 'bar'){ if (Math.random() < D.stumble) A.stumbleT = 0.9; else A.vy = 6.5; }
+    else if (o.type === 'slime'){ if (Math.random() < 0.5) A.slimeT = 1.3; }
+    else if (o.type === 'bub' && Math.random() < D.boost / 2) A.boostT = 2.2;
+  }
+  // pick a lane: steer around the next bar, otherwise wander
+  const nb = obstacles.slice(A.next, A.next + 4).find(o => o.type === 'bar');
+  if (A.done) A.tx = -1;
+  else if (nb && nb.s - A.s < 12) A.tx = nb.x <= 0 ? 1.7 : -1.7;
+  else A.tx = Math.sin(A.s * 0.045) * 1.4;
+  A.x = lerp(A.x, A.tx, 1 - Math.exp(-dt * 1.8));
+  // keep the race close (rubber band), but not perfectly
+  const gap = A.s - P.s;
+  const rb = clamp(1 - gap * 0.007, 0.78, 1.22);
+  let target = D.base * rb;
+  if (A.boostT > 0) target = 12.5;
+  if (A.slimeT > 0) target *= 0.55;
+  if (A.stumbleT > 0) target = 2.2;
+  if (A.done) target = A.s > CL + 7 ? 0 : 5;
+  if (state !== 'race' && !A.done) target = state === 'finished' ? D.base : 0;
+  A.speed = lerp(A.speed, target, 1 - Math.exp(-dt * (A.stumbleT > 0 ? 10 : 3)));
+  A.s = Math.min(A.s + A.speed * dt, CL + 9);
+  if (A.h > 0 || A.vy > 0){ A.h += A.vy * dt; A.vy -= 20 * dt; if (A.h <= 0){ A.h = 0; A.vy = 0; } }
+  A.phase += A.speed * dt * 1.25;
+  if (!A.done && A.s >= FINISH){
+    A.done = true; A.time = raceT;
+    if (!P.done){ toast('Какашечка уже у очистных! Догоняй!', 2.6); }
+  }
+}
+function updateBubbles(dt){
+  const t = performance.now() / 1000;
+  for (let i = Math.max(0, P.next - 2); i < obstacles.length && obstacles[i].s < P.s + 80; i++){
+    const o = obstacles[i]; if (o.type !== 'bub' || !o.mesh.visible) continue;
+    o.mesh.position.copy(o.base); o.mesh.position.y += Math.sin(t * 3 + o.s) * 0.12;
+  }
+}
+const _cam = new V3(), _look = new V3(), _lookS = new V3();
+function placeRacers(){
+  place(girl, P.s, P.x, 0.1 + P.h); girl.rotateZ(P.lean || 0);
+  if (P.stumbleT > 0){ girl.rotateX(-0.45); girl.visible = Math.floor(P.stumbleT * 12) % 2 === 0; } else girl.visible = true;
+  animGirl(P.phase, Math.min(1, P.speed / 8), P.h > 0.05);
+  place(poo, A.s, A.x, 0.08 + A.h);
+  if (A.stumbleT > 0) poo.rotateZ(Math.sin(A.stumbleT * 20) * 0.4);
+  animPoo(A.phase, A.speed > 0.5 ? 1 : 0);
+  frame(P.s + 2, _f); headLight.position.copy(_f.p).addScaledVector(_f.u, 1.2);
+}
+function followCam(dt){
+  if (state === 'finished' && room && stateT > 0.4){
+    room.localToWorld(_cam.set(3.5, -3.4, -3)); room.localToWorld(_look.set(0, -6.8, -13));
+    const k = 1 - Math.exp(-dt * 2.5);
+    camera.position.lerp(_cam, k); _lookS.lerp(_look, k); camera.up.set(0, 1, 0); camera.lookAt(_lookS);
+    return;
+  }
+  const cs = Math.max(START_S - 6.5, P.s - 5.6);
+  worldPos(cs, P.x * 0.5, 2.35 + P.h * 0.3, _cam);
+  const up = _f.u.clone();
+  worldPos(P.s + 6, P.x * 0.7, 0.9, _look);
+  const k = dt >= 1 ? 1 : 1 - Math.exp(-dt * 8);
+  camera.position.lerp(_cam, k); _lookS.lerp(_look, k);
+  if (dt >= 1) _lookS.copy(_look);
+  camera.up.copy(up); camera.lookAt(_lookS);
+}
+function updateHud(){
+  const pctP = clamp((P.s - START_S) / (FINISH - START_S), 0, 1) * 100;
+  const pctA = clamp((A.s - START_S) / (FINISH - START_S), 0, 1) * 100;
+  $('mkA').style.left = pctP + '%'; $('mkP').style.left = pctA + '%';
+  $('tm').textContent = fmt(P.done ? P.time : raceT);
+  $('dist').textContent = 'До очистных: ' + Math.max(0, Math.ceil(FINISH - P.s)) + ' м';
+  $('bub').textContent = 'Пузырей: ' + P.bub;
+  $('boost').textContent = P.boostT > 0 ? 'Ускорение!' : '';
+}
+function showResult(){
+  const win = P.time > 0 && (!A.done || A.time > P.time);
+  $('resTitle').textContent = win ? 'Анфиса победила!' : 'Какашечка прибежала первой!';
+  $('resText').textContent = win ? 'Ура! Анфиса первой добежала до очистных сооружений.' : 'Почти получилось! Собирай больше пузырей и прыгай через трубы.';
+  let aTime = A.done ? fmt(A.time) : 'ещё бежит';
+  const best = getBest(); let rec = '';
+  if (win && (!best || P.time < best)){ setBest(P.time); rec = ' (рекорд!)'; }
+  $('resTable').innerHTML =
+    `<span>Время Анфисы</span><span>${fmt(P.time)}${rec}</span>` +
+    `<span>Время Какашечки</span><span>${aTime}</span>` +
+    `<span>Собрано пузырей</span><span>${P.bub}</span>` +
+    `<span>Врезалась в трубы</span><span>${P.hits}</span>`;
+  $('result').hidden = false; $('touch').hidden = true;
+}
+
+/* ---------- Boot ---------- */
+introCam();
+const fontWait = (document.fonts && document.fonts.load) ? document.fonts.load('100px "Rubik Bubbles"').catch(() => {}) : Promise.resolve();
+Promise.race([fontWait, new Promise(r => setTimeout(r, 2500))]).then(() => {
+  buildWorld(); worldReady = true; bathPose();
+  if (pendingStart){ pendingStart = false; startIntro(); }
+});
+let last = performance.now();
+function loop(now){
+  requestAnimationFrame(loop);
+  let dt = Math.min((now - last) / 1000, 0.05); last = now;
+  if (paused) dt = 0;
+  update(dt);
+  renderer.render(scene, camera);
+}
+requestAnimationFrame(loop);
+})();
+</script>
